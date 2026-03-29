@@ -3,6 +3,21 @@ import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { TRootStackParamList } from './App';
 
+/**
+ * VULNERABILITY: No Input Validation
+ * Type: Insufficient Input Validation
+ * 
+ * Issue:
+ * Username and password inputs are not validated or sanitized.
+ * 
+ * Risk:
+ * - Empty or malformed input accepted
+ * - Potential injection attacks in future expansions
+ * 
+ * Fix:
+ * - Validate input length and format
+ * - Sanitize user input
+ */
 export interface IUser {
 	username: string;
 	// REMOVED password from interface (security improvement)
@@ -82,13 +97,13 @@ export default function Login(props: TProps) {
 				onChangeText={setUsername}
 				placeholder="Username"
 				autoCapitalize="none"
-				secureTextEntry={true} // FIX: hide password
 			/>
 			<TextInput
 				style={styles.password}
 				value={password}
 				onChangeText={setPassword}
 				placeholder="Password"
+				secureTextEntry={true} // FIX: hide password
 			/>
 			<Button title="Login" onPress={login} />
 		</View>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Button, Alert } from 'react-native';
+import { evaluate } from 'mathjs'; // SAFE math equation
 
 interface IProps {
 	title: string;
@@ -8,9 +9,20 @@ interface IProps {
 
 function Note(props: IProps) {
 	function evaluateEquation() {
-		const result = eval(props.text);
+		// FIX: Removed eval() → replaced with safe math evaluation
+		try {
+			// VERY basic safe calculation (only numbers/operators)
+			if (!/^[0-9+\-*/().\s]+$/.test(props.text)) {
+				throw new Error('Invalid expression');
+			}
 
-		Alert.alert('Result', 'Result: ' + result);
+			// Only allow safe math expressions
+			const result = evaluate(props.text);
+
+			Alert.alert('Result', 'Result: ' + result);
+		} catch {
+			Alert.alert('Error', 'Invalid equation.');
+		}
 	}
 
 	return (
