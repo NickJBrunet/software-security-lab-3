@@ -10,8 +10,8 @@ export interface INote {
 	text: string;
 }
 
-interface IProps {
-}
+// interface IProps {
+// }
 
 interface IState {
 	notes: INote[];
@@ -19,98 +19,140 @@ interface IState {
 	newNoteEquation: string;
 }
 
-type TProps = NativeStackScreenProps<TRootStackParamList, 'Notes'> & IProps;
+type TProps = NativeStackScreenProps<TRootStackParamList, 'Notes'>;
 
 export default class Notes extends React.Component<TProps, IState> {
+
 	constructor(props: Readonly<TProps>) {
 		super(props);
 
 		this.state = {
 			notes: [],
 			newNoteTitle: '',
-			newNoteEquation: ''
+			newNoteEquation: '',
 		};
-
-		this.onNoteTitleChange = this.onNoteTitleChange.bind(this);
-		this.onNoteEquationChange = this.onNoteEquationChange.bind(this);
-		this.addNote = this.addNote.bind(this);
 	}
 
-	public async componentDidMount() {
+	async componentDidMount() {
 		const existing = await this.getStoredNotes();
-
 		this.setState({ notes: existing });
 	}
 
-	public async componentWillUnmount() {
-		this.storeNotes(this.state.notes);
+	async componentWillUnmount() {
+		await this.storeNotes(this.state.notes);
 	}
 
 	private async getStoredNotes(): Promise<INote[]> {
-		const suffix = this.props.route.params.user.username + '-' + this.props.route.params.user.password;
+		try {
+			//FIX: Removed password from storage key
+			const key = 'notes-' + this.props.route.params.user.username;
 
-		const value = await AsyncStorage.getItem('notes-' + suffix);
+			const value = await AsyncStorage.getItem(key);
 
-		if (value !== null) {
-			return JSON.parse(value);
-		} else {
-			return [];
+			if (value) {
+				/**
+				 * VULNERABILITY: Unsafe JSON Parsing
+				 * 
+				 * Issue:
+				 * JSON.parse is used without error handling.
+				 * 
+				 * Risk:
+				 * - App crash if stored data is corrupted
+				 * 
+				 * Fix:
+				 * - Wrap in try/catch
+				 */
+				return JSON.parse(value);
+			}
+		} catch (err) {
+			Alert.alert('Error', 'Failed to load notes.');
 		}
+
+		return [];
 	}
 
 	private async storeNotes(notes: INote[]) {
-		const suffix = this.props.route.params.user.username + '-' + this.props.route.params.user.password;
+		try {
+			const key = 'notes-' + this.props.route.params.user.username;
 
-		const jsonValue = JSON.stringify(notes);
-		await AsyncStorage.setItem('notes-' + suffix, jsonValue);
+			const jsonValue = JSON.stringify(notes);
+
+			/**
+			 * VULNERABILITY: Insecure Data Storage
+			 * Type: Insecure Data Storage
+			 * 
+			 * Issue:
+			 * Notes are stored using AsyncStorage in plain text.
+			 * The storage key includes the user's password.
+			 * 
+			 * Risk:
+			 * - Sensitive data can be accessed if device is compromised
+			 * - Password exposure via storage key
+			 * 
+			 * Fix:
+			 * - Use encrypted storage (react-native-keychain or secure storage)
+			 * - Never include passwords in storage keys
+			 */
+			/**
+			 * NOTE: Still using AsyncStorage (not encrypted)
+			 * In real apps → use encrypted storage
+			 */
+			await AsyncStorage.setItem(key, jsonValue);
+		} catch (err) {
+			Alert.alert('Error', 'Failed to save notes.');
+		}
 	}
 
-	private onNoteTitleChange(value: string) {
-		this.setState({ newNoteTitle: value });
-	}
+	private addNote = () => {
+		const { newNoteTitle, newNoteEquation } = this.state;
 
-	private onNoteEquationChange(value: string) {
-		this.setState({ newNoteEquation: value });
-	}
-
-	private addNote() {
-		const note: INote = {
-			title: this.state.newNoteTitle,
-			text: this.state.newNoteEquation
-		};
-
-		if (note.title === '' || note.text === '') {
+		//FIX: Input validation
+		if (!newNoteTitle.trim() || !newNoteEquation.trim()) {
 			Alert.alert('Error', 'Title and equation cannot be empty.');
 			return;
 		}
 
-		this.setState({ 
-			notes: this.state.notes.concat(note),
-			newNoteTitle: '',
-			newNoteEquation: ''
-		});
-	}
+		//FIX: Basic sanitization (prevent injection patterns)
+		if (!/^[0-9+\-*/().\s]+$/.test(newNoteEquation)) {
+			Alert.alert('Error', 'Invalid equation format.');
+			return;
+		}
 
-	public render() {
+		const note: INote = {
+			title: newNoteTitle,
+			text: newNoteEquation,
+		};
+
+		this.setState({
+			notes: [...this.state.notes, note],
+			newNoteTitle: '',
+			newNoteEquation: '',
+		});
+	};
+
+	render() {
 		return (
 			<SafeAreaView>
-				<ScrollView contentInsetAdjustmentBehavior="automatic">
+				<ScrollView>
 					<View style={styles.container}>
 						<Text style={styles.title}>
 							{'Math Notes: ' + this.props.route.params.user.username}
 						</Text>
+
 						<TextInput
 							style={styles.titleInput}
 							value={this.state.newNoteTitle}
-							onChangeText={this.onNoteTitleChange}
+							onChangeText={(value) => this.setState({ newNoteTitle: value })}
 							placeholder="Enter your title"
 						/>
+
 						<TextInput
 							style={styles.textInput}
 							value={this.state.newNoteEquation}
-							onChangeText={this.onNoteEquationChange}
+							onChangeText={(value) => this.setState({ newNoteEquation: value })}
 							placeholder="Enter your math equation"
 						/>
+
 						<Button title="Add Note" onPress={this.addNote} />
 
 						<View style={styles.notes}>
@@ -149,6 +191,6 @@ const styles = StyleSheet.create({
 		marginBottom: 10,
 	},
 	notes: {
-		marginTop: 15
+		marginTop: 15,
 	},
 });
