@@ -97,6 +97,8 @@ function App(): React.JSX.Element {
             <ReloadInstructions />
           </Section>
           <Section title="Debug">
+            // Shows debug instructions and links in production, could leak info
+            // FIX: Wrap debug sections in condition that checks __DEV__
             <DebugInstructions />
           </Section>
           <Section title="Learn More">

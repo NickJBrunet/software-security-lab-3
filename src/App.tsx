@@ -5,6 +5,22 @@
  * @format
  */
 
+/**
+ * VULNERABILITY: Improper Authentication Handling
+ * Type: Authentication / Session Management
+ * 
+ * Issue:
+ * Authentication state is stored only in memory.
+ * No tokens, no persistence, no expiration.
+ * 
+ * Risk:
+ * - Session bypass
+ * - No secure authentication enforcement
+ * 
+ * Fix:
+ * - Use JWT or session tokens
+ * - Store securely (SecureStore / Keychain)
+ */
 import React from 'react';
 import type { PropsWithChildren } from 'react';
 import {
@@ -30,6 +46,8 @@ export type TRootStackParamList = {
 };
 
 function App() {
+    // If app is closed or crashed, user will be signed out (no persistence)
+    // FIX: In real apps, use secure token storage and validation
     const [signedInAs, setSignedInAs] = React.useState<IUser | false>(false);
 
     const Stack = createNativeStackNavigator<TRootStackParamList>();
@@ -42,6 +60,8 @@ function App() {
                         <Stack.Screen name="Login">
                             {(props) => <Login {...props} onLogin={(user) => setSignedInAs(user)} />}
                         </Stack.Screen> :
+                        // passing the full user object to Notes screen, which is not ideal (security risk)
+                        // FIX: Only pass necessary info (e.g. username) or use a secure context/state management
                         <Stack.Screen name="Notes" component={Notes} initialParams={{ user: signedInAs }} />
                 }
             </Stack.Navigator>
