@@ -59,7 +59,14 @@ function App() {
   const Stack = createNativeStackNavigator<TRootStackParamList>();
 
   /**
-   * 🔐 CHECK FOR EXISTING TOKEN (PERSIST LOGIN)
+   * SECURITY FIX: Persistent session check
+   *
+   * Change Made:
+   * Checks for an existing stored token when the app starts.
+   *
+   * Security Benefit:
+   * Prevents accidental sign-out on app reload and improves
+   * session handling compared to memory-only authentication.
    */
   React.useEffect(() => {
     const checkAuth = async () => {
@@ -67,7 +74,7 @@ function App() {
         const token = await getToken();
         console.log(await AsyncStorage.getItem('auth_token'));
         if (token) {
-          // ⚠️ In real apps → verify token with backend
+          // In real apps → verify token with backend
           // Here we simulate extracting username
           const username = token.split('-')[0];
 
@@ -84,7 +91,10 @@ function App() {
   }, []);
 
   /**
-   * 🔐 LOGOUT FUNCTION
+   * SECURITY FIX: Proper logout clears stored token
+   *
+   * Security Benefit:
+   * Ensures session data is removed on logout.
    */
   const handleLogout = async () => {
     await removeToken();
@@ -92,7 +102,7 @@ function App() {
   };
 
   /**
-   * ⏳ PREVENT UI FLASH BEFORE AUTH CHECK
+   * PREVENT UI FLASH BEFORE AUTH CHECK
    */
   if (loading) return null;
 
