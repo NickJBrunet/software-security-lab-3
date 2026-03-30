@@ -2,7 +2,7 @@ import React from 'react';
 import {View, Text, TextInput, Button, StyleSheet, Alert} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {TRootStackParamList} from './App';
-import {login, register} from './auth/authService';
+import {login} from './auth/authService';
 import {generateToken, saveToken} from './auth/tokenService';
 
 /**
@@ -36,65 +36,84 @@ export default function Login(props: TProps) {
   const [password, setPassword] = React.useState('');
 
   /**
-   * FIX: Removed hardcoded credentials
-   * In real apps → this should call a backend API
+   * Aashish Arun
+   * SECURITY FIX: Username Validation and Sanitization
+   *
+   * Issue:
+   * Username input previously accepted raw values without format restrictions.
+   *
+   * Change Made:
+   * Added trimming, required-field checks, length checks,
+   * and a whitelist of allowed username characters.
+   *
+   * Security Benefit:
+   * Prevents malformed usernames and reduces the risk of
+   * unsafe input being processed or stored.
    */
-  const validUser = {
-    username: 'joe',
-    password: 'secret',
-  };
+  function validateUsername(value: string): string | null {
+    const trimmed = value.trim();
 
-  function validateInput() {
-    if (!username || !password) {
-      Alert.alert('Error', 'Username and password cannot be empty.');
-      return false;
+    if (!trimmed) {
+      return 'Username is required.';
     }
 
-    if (username.length < 3) {
-      Alert.alert('Error', 'Username must be at least 3 characters.');
-      return false;
+    if (trimmed.length < 3 || trimmed.length > 20) {
+      return 'Username must be between 3 and 20 characters.';
     }
 
-    if (password.length < 4) {
-      Alert.alert('Error', 'Password must be at least 4 characters.');
-      return false;
+    if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) {
+      return 'Username can contain only letters, numbers, and underscores.';
     }
 
-    return true;
+    return null;
   }
 
   /**
-   * VULNERABILITY: No Input Validation
-   * Type: Insufficient Input Validation
+   * Aashish Arun
+   * SECURITY FIX: Password Validation and Sanitization
    *
    * Issue:
-   * Username and password inputs are not validated or sanitized.
+   * Password input previously accepted empty or malformed values.
    *
-   * Risk:
-   * - Empty or malformed input accepted
-   * - Potential injection attacks in future expansions
+   * Change Made:
+   * Added trimming, required checks, and length limits.
    *
-   * Fix:
-   * - Validate input length and format
-   * - Sanitize user input
+   * Security Benefit:
+   * Improves input quality and prevents weak or malformed values
+   * from being passed into the authentication flow.
    */
-  //   function login() {
-  //     // FIX: Input validation added
-  //     if (!validateInput()) return;
+  function validatePassword(value: string): string | null {
+    const trimmed = value.trim();
 
-  //     // FIX: Simulated authentication (replace with backend in real app)
-  //     if (username === validUser.username && password === validUser.password) {
-  //       props.onLogin({username}); // do NOT pass password forward
-  //     } else {
-  //       Alert.alert('Error', 'Invalid credentials.');
-  //     }
-  //   }
+    if (!trimmed) {
+      return 'Password is required.';
+    }
+
+    if (trimmed.length < 4 || trimmed.length > 50) {
+      return 'Password must be between 4 and 50 characters.';
+    }
+
+    return null;
+  }
 
   async function loginUser() {
-    if (!validateInput()) return;
+    const cleanUsername = username.trim();
+    const cleanPassword = password.trim();
+
+    const usernameError = validateUsername(cleanUsername);
+    if (usernameError) {
+      Alert.alert('Error', usernameError);
+      return;
+    }
+
+    const passwordError = validatePassword(cleanPassword);
+    if (passwordError) {
+      Alert.alert('Error', passwordError);
+      return;
+    }
 
     try {
-      const user = await login(username, password);
+      const user = await login(cleanUsername, cleanPassword);
 
       const token = generateToken(user.username);
       await saveToken(token);

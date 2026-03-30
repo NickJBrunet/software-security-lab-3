@@ -19,8 +19,7 @@ export interface INote {
   text: string;
 }
 
-// interface IProps {
-// }
+interface IProps {}
 
 interface IState {
   notes: INote[];
@@ -30,6 +29,14 @@ interface IState {
 
 type TProps = NativeStackScreenProps<TRootStackParamList, 'Notes'>;
 
+/**
+ * SECURITY FIXES APPLIED:
+ * 1. Added validation for note title and equation inputs
+ * 2. Added whitelist checks for safe title characters
+ * 3. Added strict equation validation to prevent injection-like input
+ * 4. Added length limits to reduce abuse and malformed payloads
+ * 5. Added validation for loaded notes before rendering/storing
+ */
 export default class Notes extends React.Component<TProps, IState> {
   constructor(props: Readonly<TProps>) {
     super(props);
@@ -50,10 +57,125 @@ export default class Notes extends React.Component<TProps, IState> {
     await this.storeNotes(this.state.notes);
   }
 
+  /**
+   * Aashish Arun
+   * SECURITY FIX: Consistent Username Sanitization for Storage Keys
+   *
+   * Issue:
+   * Storage keys could be built inconsistently if raw usernames
+   * are used in one place and sanitized usernames in another.
+   *
+   * Change Made:
+   * Added one shared helper method to sanitize the username
+   * before building the notes storage key.
+   *
+   * Security Benefit:
+   * Ensures predictable storage access and prevents malformed
+   * key names from user-controlled input.
+   */
+  private getSafeUsername(): string {
+    return this.props.route.params.user.username.replace(/[^a-zA-Z0-9]/g, '');
+  }
+
+  /**
+   * Aashish Arun
+   * SECURITY FIX: Note Object Validation
+   *
+   * Issue:
+   * Parsed stored data was not fully validated before use.
+   *
+   * Change Made:
+   * Added strict validation to ensure each loaded note contains
+   * a valid title and equation as strings with acceptable content.
+   *
+   * Security Benefit:
+   * Prevents malformed or unsafe stored objects from being rendered
+   * or reused by the application.
+   */
+  private isValidNote(note: any): note is INote {
+    return (
+      note &&
+      typeof note.title === 'string' &&
+      typeof note.text === 'string' &&
+      note.title.trim().length > 0 &&
+      note.title.trim().length <= 50 &&
+      /^[a-zA-Z0-9\s\-_]+$/.test(note.title.trim()) &&
+      note.text.trim().length > 0 &&
+      note.text.trim().length <= 100 &&
+      /^[0-9+\-*/().\s]+$/.test(note.text.trim())
+    );
+  }
+
+  /**
+   * Aashish Arun
+   * SECURITY FIX: Note Title Validation
+   *
+   * Issue:
+   * Note titles were only checked for empty input.
+   *
+   * Change Made:
+   * Added trimming, required checks, length limits,
+   * and a whitelist of safe characters.
+   *
+   * Security Benefit:
+   * Prevents malformed note titles and reduces the risk
+   * of injection-style payloads being stored.
+   */
+  private validateNoteTitle(value: string): string | null {
+    const trimmed = value.trim();
+
+    if (!trimmed) {
+      return 'Title is required.';
+    }
+
+    if (trimmed.length < 2 || trimmed.length > 50) {
+      return 'Title must be between 2 and 50 characters.';
+    }
+
+    if (!/^[a-zA-Z0-9\s\-_]+$/.test(trimmed)) {
+      return 'Title can contain only letters, numbers, spaces, hyphens, and underscores.';
+    }
+
+    return null;
+  }
+
+  /**
+   * Aashish Arun
+   * SECURITY FIX: Equation Validation
+   *
+   * Issue:
+   * Equation input needed stricter validation and length limits.
+   *
+   * Change Made:
+   * Added trimming, required checks, maximum length control,
+   * and a strict whitelist for allowed math characters only.
+   *
+   * Security Benefit:
+   * Reduces the risk of malformed or injection-style input
+   * being accepted and stored.
+   */
+  private validateEquation(value: string): string | null {
+    const trimmed = value.trim();
+
+    if (!trimmed) {
+      return 'Equation is required.';
+    }
+
+    if (trimmed.length > 100) {
+      return 'Equation must be 100 characters or less.';
+    }
+
+    if (!/^[0-9+\-*/().\s]+$/.test(trimmed)) {
+      return 'Invalid equation format.';
+    }
+
+    return null;
+  }
+
   private async getStoredNotes(): Promise<INote[]> {
     try {
       //FIX: Removed password from storage key
-      const key = 'notes-' + this.props.route.params.user.username;
+      const key = 'notes-' + this.getSafeUsername();
 
       const value = await AsyncStorage.getItem(key);
 
@@ -70,9 +192,14 @@ export default class Notes extends React.Component<TProps, IState> {
          * Fix:
          * - Wrap in try/catch
          */
-        // return JSON.parse(value);
         try {
-          return JSON.parse(value);
+          const parsed = JSON.parse(value);
+
+          if (!Array.isArray(parsed)) {
+            return [];
+          }
+
+          return parsed.filter(note => this.isValidNote(note));
         } catch (e) {
           console.error('Corrupted notes data:', e);
           return [];
@@ -87,12 +214,9 @@ export default class Notes extends React.Component<TProps, IState> {
 
   private async storeNotes(notes: INote[]) {
     try {
-      const safeUsername = this.props.route.params.user.username.replace(
-        /[^a-zA-Z0-9]/g,
-        '',
-      );
-      const key = 'notes-' + safeUsername;
-      const jsonValue = JSON.stringify(notes);
+      const key = 'notes-' + this.getSafeUsername();
+      const safeNotes = notes.filter(note => this.isValidNote(note));
+      const jsonValue = JSON.stringify(safeNotes);
 
       /**
        * VULNERABILITY: Insecure Data Storage
@@ -123,21 +247,24 @@ export default class Notes extends React.Component<TProps, IState> {
   private addNote = () => {
     const {newNoteTitle, newNoteEquation} = this.state;
 
-    //FIX: Input validation
-    if (!newNoteTitle.trim() || !newNoteEquation.trim()) {
-      Alert.alert('Error', 'Title and equation cannot be empty.');
+    const safeTitle = newNoteTitle.trim();
+    const safeEquation = newNoteEquation.trim();
+
+    const titleError = this.validateNoteTitle(safeTitle);
+    if (titleError) {
+      Alert.alert('Error', titleError);
       return;
     }
 
-    //FIX: Basic sanitization (prevent injection patterns)
-    if (!/^[0-9+\-*/().\s]+$/.test(newNoteEquation)) {
-      Alert.alert('Error', 'Invalid equation format.');
+    const equationError = this.validateEquation(safeEquation);
+    if (equationError) {
+      Alert.alert('Error', equationError);
       return;
     }
 
     const note: INote = {
-      title: newNoteTitle,
-      text: newNoteEquation,
+      title: safeTitle,
+      text: safeEquation,
     };
 
     this.setState({
